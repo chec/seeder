@@ -1,0 +1,22 @@
+{
+  "name": "@chec/seeder",
+  "version": "0.0.0",
+  "description": "A utility script to seed data in your Chec account from .json files",
+  "main": "index.js",
+  "bin": {
+    "chec-seed": "bin.js"
+  },
+  "repository": "https://github.com/chec/seeder",
+  "author": "Chec Platform Ltd.",
+  "license": "BSD-3-Clause",
+  "private": false,
+  "dependencies": {
+    "chalk": "^3.0.0",
+    "dotenv": "^8.2.0",
+    "got": "^9.6.0",
+    "lodash.get": "^4.4.2",
+    "ora": "^4.0.3",
+    "promise-queue": "^2.2.5",
+    "yargs": "^15.0.2"
+  }
+}

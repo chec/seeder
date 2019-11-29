@@ -1,0 +1,45 @@
+# Chec Seeder
+
+A small utility to help with seeding data in your Chec dashboard
+
+## Download
+
+```
+npm install @chec/seeder
+```
+
+## Usage
+
+### As a NPM script
+
+Add a seed command to your package.json
+
+```
+{
+    "scripts": {
+        "seed": "chec-seed path/to/json/files"
+    }
+}
+```
+
+A Chec secret API key must be available in as the environment variable `CHEC_API_KEY` to use for seeding. The script is compatible with [dotenv](https://www.npmjs.com/package/dotenv).
+
+### Global usage
+
+This script can be installed globally:
+
+```
+npm install -g @chec/seeder
+```
+
+Then you can use this helper outside of a project to seed data easily.
+
+### Within code
+
+You can also use this package within your Node.js projects:
+
+```
+const seed = require('@chec/seeder');
+
+seed('path/to/json/files');
+```
