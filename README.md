@@ -1,5 +1,8 @@
 # Chec Seeder
 
+[![Version](https://img.shields.io/npm/v/@chec/seeder.svg)](https://npmjs.org/package/@chec/seeder)
+[![License](https://img.shields.io/github/license/chec/seeder.svg)](https://github.com/chec/seeder/blob/master/LICENSE.md)
+
 A small utility to help with seeding data in your Chec dashboard
 
 ## Download
