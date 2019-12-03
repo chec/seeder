@@ -9,199 +9,198 @@ const got = require('got');
 const get = require('lodash.get');
 
 class Seeder {
-	constructor(logHandler, showSpinner) {
-		this.log = logHandler;
-		this.showSpinner = showSpinner
-	}
+  constructor(logHandler, showSpinner) {
+    this.log = logHandler;
+    this.showSpinner = showSpinner
+  }
 
-	async run(path = process.cwd()) {
-		const entries = Object.entries(this.parsePath(path.replace(new RegExp(`${sep}$`), '')));
+  async run(path = process.cwd()) {
+    const entries = Object.entries(this.parsePath(path.replace(new RegExp(`${sep}$`), '')));
 
-		if (entries.length === 0) {
-			return this.error('The given path must be a .json file or a directory containing at least one valid .json file');
-		}
+    if (entries.length === 0) {
+      return this.error('The given path must be a .json file or a directory containing at least one valid .json file');
+    }
 
-		entries.sort(([a], [b]) => a === 'assets' ? 1 : b === 'assets' ? -1 : 0);
+    entries.sort(([a], [b]) => a === 'assets' ? 1 : b === 'assets' ? -1 : 0);
 
-		if (this.showSpinner) {
-			this.spinner = ora({
-				text: 'Seeding. This may take some time...',
-				stream: process.stdout,
-			}).start();
-		}
+    if (this.showSpinner) {
+      this.spinner = ora({
+        text: 'Seeding. This may take some time...',
+        stream: process.stdout,
+      }).start();
+    }
 
-		const typeCounts = {};
-		const queuedPromises = [];
-		const responses = {};
-		const queue = new PromiseQueue(1, Infinity);
+    const typeCounts = {};
+    const queuedPromises = [];
+    const responses = {};
+    const queue = new PromiseQueue(1, Infinity);
 
-		entries.forEach(([endpoint, data]) => {
-			(Array.isArray(data) ? data : [data]).forEach((datum, index) => {
-				const {link, ...rest} = datum;
+    entries.forEach(([endpoint, data]) => {
+      (Array.isArray(data) ? data : [data]).forEach((datum, index) => {
+        const {link, ...rest} = datum;
 
-				queuedPromises.push(queue.add(() => {
-				  if (this.showSpinner) {
-				    this.spinner.stop();
-				    this.spinner.start(`Seeding ${chalk.dim(endpoint)} #${index}. This may take some time...`);
-				  }
+        queuedPromises.push(queue.add(() => {
+            if (this.showSpinner) {
+              this.spinner.text = `Seeding ${chalk.dim(endpoint)} #${index}. This may take some time...`;
+            }
 
-          return this.post(`/v1/${endpoint}`, rest)
-            .then(response => {
-              if (Object.hasOwnProperty.call(typeCounts, endpoint)) {
-                typeCounts[endpoint]++;
-              } else {
-                responses[endpoint] = [];
-                typeCounts[endpoint] = 1;
-              }
-              responses[endpoint].push(JSON.parse(response.body))
+            return this.post(`/v1/${endpoint}`, rest)
+              .then(response => {
+                if (Object.hasOwnProperty.call(typeCounts, endpoint)) {
+                  typeCounts[endpoint]++;
+                } else {
+                  responses[endpoint] = [];
+                  typeCounts[endpoint] = 1;
+                }
+                responses[endpoint].push(JSON.parse(response.body))
+              })
+              .catch(error => {
+                if (this.showSpinner) {
+                  this.spinner.stop();
+                }
+                this.log(`Could not push an object to the ${chalk.dim(endpoint)} endpoint (${error.message}):`);
+                if (this.showSpinner) {
+                  this.spinner.start()
+                }
+              })
+          }
+        ));
+
+        if (endpoint === 'assets' && link) {
+          queuedPromises.push(queue.add(() => {
+            const assetId = responses.assets[index].id;
+            const productId = get(responses, link);
+
+            return this.post(`/v1/products/${productId}/assets`, {
+              assets: [{id: assetId}]
             })
-            .catch(error => {
-              if (this.showSpinner) {
-                this.spinner.stop();
-              }
-              this.log(`Could not push an object to the ${chalk.dim(endpoint)} endpoint (${error.message}):`);
-              if (this.showSpinner) {
-                this.spinner.start()
-              }
-            })
-					}
-				));
+          }))
+        }
+      });
+    });
 
-				if (endpoint === 'assets' && link) {
-					queuedPromises.push(queue.add(() => {
-						const assetId = responses.assets[index].id;
-						const productId = get(responses, link);
+    await Promise.all(queuedPromises);
 
-						return this.post(`/v1/products/${productId}/assets`, {
-							assets: [{id: assetId}]
-						})
-					}))
-				}
-			});
-		});
+    const report = Object.entries(typeCounts);
 
-		await Promise.all(queuedPromises);
+    if (report.length === 0) {
+      if (this.showSpinner) {
+        this.spinner.fail('Could not seed any of the provided data');
+      }
+      return
+    }
 
-		const report = Object.entries(typeCounts);
+    if (this.showSpinner) {
+      this.spinner.succeed('Completed seeding');
+    }
+    this.log('Added:');
+    report.forEach(([endpoint, count]) => {
+      this.log(`  ${chalk.bold(count)} ${endpoint}`);
+    })
+  }
 
-		if (report.length === 0) {
-			if (this.showSpinner) {
-				this.spinner.fail('Could not seed any of the provided data');
-			}
-			return
-		}
+  parsePath(path) {
+    let stat;
 
-		if (this.showSpinner) {
-			this.spinner.succeed('Completed seeding');
-		}
-		this.log('Added:');
-		report.forEach(([endpoint, count]) => {
-			this.log(`  ${chalk.bold(count)} ${endpoint}`);
-		})
-	}
+    try {
+      stat = fs.statSync(path);
+    } catch (error) {
+      return this.error(`Could not access given path: ${chalk.dim(path)}`);
+    }
 
-	parsePath(path) {
-		let stat;
+    let additionalErrorInfo = '';
 
-		try {
-			stat = fs.statSync(path);
-		} catch (error) {
-			return this.error(`Could not access given path: ${chalk.dim(path)}`);
-		}
+    try {
+      if (stat.isDirectory()) {
+        return this.parseDirectory(path);
+      }
+      if (stat.isFile()) {
+        return this.parseFile(path);
+      }
+    } catch (error) {
+      if (error.name === 'SyntaxError') {
+        additionalErrorInfo = `JSON failed to compile with error: ${chalk.dim(error.message)}.`;
+      }
+    }
 
-		let additionalErrorInfo = '';
+    return this.error(`Could not parse the given path: ${chalk.dim(path)}. ${additionalErrorInfo}`);
+  }
 
-		try {
-			if (stat.isDirectory()) {
-				return this.parseDirectory(path);
-			}
-			if (stat.isFile()) {
-				return this.parseFile(path);
-			}
-		} catch (error) {
-			if (error.name === 'SyntaxError') {
-				additionalErrorInfo = `JSON failed to compile with error: ${chalk.dim(error.message)}.`;
-			}
-		}
+  parseDirectory(directory) {
+    const files = fs.readdirSync(directory);
 
-		return this.error(`Could not parse the given path: ${chalk.dim(path)}. ${additionalErrorInfo}`);
-	}
+    const result = {};
 
-	parseDirectory(directory) {
-		const files = fs.readdirSync(directory);
+    for (const file of files) {
+      // Ignore dotfiles
+      if (file.startsWith('.') || !file.endsWith('.json')) {
+        continue;
+      }
 
-		const result = {};
+      Object.entries(this.parsePath(directory + sep + file)).forEach(([key, value]) => {
+        if (Object.hasOwnProperty.call(result, key)) {
+          result[key].push(...value);
+        } else {
+          result[key] = value;
+        }
+      });
+    }
 
-		for (const file of files) {
-			// Ignore dotfiles
-			if (file.startsWith('.') || !file.endsWith('.json')) {
-				continue;
-			}
+    return result;
+  }
 
-			Object.entries(this.parsePath(directory + sep + file)).forEach(([key, value]) => {
-				if (Object.hasOwnProperty.call(result, key)) {
-					result[key].push(...value);
-				} else {
-					result[key] = value;
-				}
-			});
-		}
+  parseFile(file) {
+    if (file.match(/package(-lock)?\.json$/)) {
+      return {};
+    }
 
-		return result;
-	}
+    const contents = JSON.parse(fs.readFileSync(file));
 
-	parseFile(file) {
-		if (file.match(/package(-lock)?\.json$/)) {
-			return {};
-		}
+    if (Array.isArray(contents)) {
+      const lastSeperator = file.lastIndexOf(sep);
+      const endpoint = file.substring(lastSeperator > 0 ? lastSeperator + 1 : 0, file.length - 5);
+      return {
+        [endpoint]: contents,
+      };
+    }
 
-		const contents = JSON.parse(fs.readFileSync(file));
+    return contents;
+  }
 
-		if (Array.isArray(contents)) {
-			const lastSeperator = file.lastIndexOf(sep);
-			const endpoint = file.substring(lastSeperator > 0 ? lastSeperator + 1 : 0, file.length - 5);
-			return {
-				[endpoint]: contents,
-			};
-		}
+  post(endpoint, payload) {
+    const url = process.env.CHEC_API_URL;
+    const key = process.env.CHEC_SECRET_KEY;
 
-		return contents;
-	}
+    if (!url || !key) {
+      return this.error(`Required .env keys "${chalk.bold('CHEC_API_URL')}" and/or ${chalk.bold('CHEC_SECRET_KEY')} are missing`);
+    }
 
-	post(endpoint, payload) {
-		const url = process.env.CHEC_API_URL;
-		const key = process.env.CHEC_SECRET_KEY;
+    const headers = {
+      'content-type': 'application/json',
+      'x-authorization': key,
+    };
 
-		if (!url || !key) {
-			return this.error(`Required .env keys "${chalk.bold('CHEC_API_URL')}" and/or ${chalk.bold('CHEC_SECRET_KEY')} are missing`);
-		}
+    return got(`${url}/${endpoint}`, {
+      method: 'post',
+      body: JSON.stringify(payload),
+      headers,
+      retry: {
+        retries: 0,
+      },
+    });
+  }
 
-		const headers = {
-			'content-type': 'application/json',
-			'x-authorization': key,
-		};
-
-		return got(`${url}/${endpoint}`, {
-			method: 'post',
-			body: JSON.stringify(payload),
-			headers,
-			retry: {
-				retries: 0,
-			},
-		});
-	}
-
-	error(log) {
-		if (this.showSpinner) {
-			this.spinner.stop();
-		}
-		throw new Error(log)
-	}
+  error(log) {
+    if (this.showSpinner) {
+      this.spinner.stop();
+    }
+    throw new Error(log)
+  }
 }
 
 module.exports = {
-	seed(path, logHandler = () => {}, spinner = false) {
-		return new Seeder(logHandler, spinner).run(path);
-	},
-	Seeder,
+  seed(path, logHandler = () => {}, spinner = false) {
+    return new Seeder(logHandler, spinner).run(path);
+  },
+  Seeder,
 }
