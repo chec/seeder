@@ -25,7 +25,7 @@ class Seeder {
 
     if (this.showSpinner) {
         this.spinner = ora({
-          text: 'Seeding...',
+          text: 'Seeding. This may take some time...',
           stream: process.stdout,
         }).start();
     }
@@ -82,7 +82,7 @@ class Seeder {
       if (this.showSpinner) {
         this.spinner.fail('Could not seed any of the provided data');
       }
-      return 
+      return
     }
 
     if (this.showSpinner) {
