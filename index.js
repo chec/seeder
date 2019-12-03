@@ -24,10 +24,10 @@ class Seeder {
     entries.sort(([a], [b]) => a === 'assets' ? 1 : b === 'assets' ? -1 : 0);
 
     if (this.showSpinner) {
-        this.spinner = ora({
-          text: 'Seeding. This may take some time...',
-          stream: process.stdout,
-        }).start();
+      this.spinner = ora({
+        text: 'Seeding. This may take some time...',
+        stream: process.stdout,
+      }).start();
     }
 
     const typeCounts = {};
@@ -39,26 +39,31 @@ class Seeder {
       (Array.isArray(data) ? data : [data]).forEach((datum, index) => {
         const {link, ...rest} = datum;
 
-        queuedPromises.push(queue.add(() =>
-          this.post(`/v1/${endpoint}`, rest)
-            .then(response => {
-              if (Object.hasOwnProperty.call(typeCounts, endpoint)) {
-                typeCounts[endpoint]++;
-              } else {
-                responses[endpoint] = [];
-                typeCounts[endpoint] = 1;
-              }
-              responses[endpoint].push(JSON.parse(response.body))
-            })
-            .catch(error => {
-              if (this.showSpinner) {
-                this.spinner.stop();
-              }
-              this.log(`Could not push an object to the ${chalk.dim(endpoint)} endpoint (${error.message}):`);
-              if (this.showSpinner) {
-                this.spinner.start()
-              }
-            })
+        queuedPromises.push(queue.add(() => {
+            if (this.showSpinner) {
+              this.spinner.text = `Seeding ${chalk.dim(endpoint)} #${index}. This may take some time...`;
+            }
+
+            return this.post(`/v1/${endpoint}`, rest)
+              .then(response => {
+                if (Object.hasOwnProperty.call(typeCounts, endpoint)) {
+                  typeCounts[endpoint]++;
+                } else {
+                  responses[endpoint] = [];
+                  typeCounts[endpoint] = 1;
+                }
+                responses[endpoint].push(JSON.parse(response.body))
+              })
+              .catch(error => {
+                if (this.showSpinner) {
+                  this.spinner.stop();
+                }
+                this.log(`Could not push an object to the ${chalk.dim(endpoint)} endpoint (${error.message}):`);
+                if (this.showSpinner) {
+                  this.spinner.start()
+                }
+              })
+          }
         ));
 
         if (endpoint === 'assets' && link) {
@@ -194,8 +199,8 @@ class Seeder {
 }
 
 module.exports = {
-    seed(path, logHandler = () => {}, spinner = false) {
-        return new Seeder(logHandler, spinner).run(path);
-    },
-    Seeder,
+  seed(path, logHandler = () => {}, spinner = false) {
+    return new Seeder(logHandler, spinner).run(path);
+  },
+  Seeder,
 }
