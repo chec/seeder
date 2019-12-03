@@ -9,38 +9,43 @@ const got = require('got');
 const get = require('lodash.get');
 
 class Seeder {
-  constructor(logHandler, showSpinner) {
-    this.log = logHandler;
-    this.showSpinner = showSpinner
-  }
+	constructor(logHandler, showSpinner) {
+		this.log = logHandler;
+		this.showSpinner = showSpinner
+	}
 
-  async run(path = process.cwd()) {
-    const entries = Object.entries(this.parsePath(path.replace(new RegExp(`${sep}$`), '')));
+	async run(path = process.cwd()) {
+		const entries = Object.entries(this.parsePath(path.replace(new RegExp(`${sep}$`), '')));
 
-    if (entries.length === 0) {
-      return this.error('The given path must be a .json file or a directory containing at least one valid .json file');
-    }
+		if (entries.length === 0) {
+			return this.error('The given path must be a .json file or a directory containing at least one valid .json file');
+		}
 
-    entries.sort(([a], [b]) => a === 'assets' ? 1 : b === 'assets' ? -1 : 0);
+		entries.sort(([a], [b]) => a === 'assets' ? 1 : b === 'assets' ? -1 : 0);
 
-    if (this.showSpinner) {
-        this.spinner = ora({
-          text: 'Seeding. This may take some time...',
-          stream: process.stdout,
-        }).start();
-    }
+		if (this.showSpinner) {
+			this.spinner = ora({
+				text: 'Seeding. This may take some time...',
+				stream: process.stdout,
+			}).start();
+		}
 
-    const typeCounts = {};
-    const queuedPromises = [];
-    const responses = {};
-    const queue = new PromiseQueue(1, Infinity);
+		const typeCounts = {};
+		const queuedPromises = [];
+		const responses = {};
+		const queue = new PromiseQueue(1, Infinity);
 
-    entries.forEach(([endpoint, data]) => {
-      (Array.isArray(data) ? data : [data]).forEach((datum, index) => {
-        const {link, ...rest} = datum;
+		entries.forEach(([endpoint, data]) => {
+			(Array.isArray(data) ? data : [data]).forEach((datum, index) => {
+				const {link, ...rest} = datum;
 
-        queuedPromises.push(queue.add(() =>
-          this.post(`/v1/${endpoint}`, rest)
+				queuedPromises.push(queue.add(() => {
+				  if (this.showSpinner) {
+				    this.spinner.stop();
+				    this.spinner.start(`Seeding ${chalk.dim(endpoint)} #${index}. This may take some time...`);
+				  }
+
+          return this.post(`/v1/${endpoint}`, rest)
             .then(response => {
               if (Object.hasOwnProperty.call(typeCounts, endpoint)) {
                 typeCounts[endpoint]++;
@@ -59,143 +64,144 @@ class Seeder {
                 this.spinner.start()
               }
             })
-        ));
+					}
+				));
 
-        if (endpoint === 'assets' && link) {
-          queuedPromises.push(queue.add(() => {
-            const assetId = responses.assets[index].id;
-            const productId = get(responses, link);
+				if (endpoint === 'assets' && link) {
+					queuedPromises.push(queue.add(() => {
+						const assetId = responses.assets[index].id;
+						const productId = get(responses, link);
 
-            return this.post(`/v1/products/${productId}/assets`, {
-              assets: [{id: assetId}]
-            })
-          }))
-        }
-      });
-    });
+						return this.post(`/v1/products/${productId}/assets`, {
+							assets: [{id: assetId}]
+						})
+					}))
+				}
+			});
+		});
 
-    await Promise.all(queuedPromises);
+		await Promise.all(queuedPromises);
 
-    const report = Object.entries(typeCounts);
+		const report = Object.entries(typeCounts);
 
-    if (report.length === 0) {
-      if (this.showSpinner) {
-        this.spinner.fail('Could not seed any of the provided data');
-      }
-      return
-    }
+		if (report.length === 0) {
+			if (this.showSpinner) {
+				this.spinner.fail('Could not seed any of the provided data');
+			}
+			return
+		}
 
-    if (this.showSpinner) {
-      this.spinner.succeed('Completed seeding');
-    }
-    this.log('Added:');
-    report.forEach(([endpoint, count]) => {
-      this.log(`  ${chalk.bold(count)} ${endpoint}`);
-    })
-  }
+		if (this.showSpinner) {
+			this.spinner.succeed('Completed seeding');
+		}
+		this.log('Added:');
+		report.forEach(([endpoint, count]) => {
+			this.log(`  ${chalk.bold(count)} ${endpoint}`);
+		})
+	}
 
-  parsePath(path) {
-    let stat;
+	parsePath(path) {
+		let stat;
 
-    try {
-      stat = fs.statSync(path);
-    } catch (error) {
-      return this.error(`Could not access given path: ${chalk.dim(path)}`);
-    }
+		try {
+			stat = fs.statSync(path);
+		} catch (error) {
+			return this.error(`Could not access given path: ${chalk.dim(path)}`);
+		}
 
-    let additionalErrorInfo = '';
+		let additionalErrorInfo = '';
 
-    try {
-      if (stat.isDirectory()) {
-        return this.parseDirectory(path);
-      }
-      if (stat.isFile()) {
-        return this.parseFile(path);
-      }
-    } catch (error) {
-      if (error.name === 'SyntaxError') {
-        additionalErrorInfo = `JSON failed to compile with error: ${chalk.dim(error.message)}.`;
-      }
-    }
+		try {
+			if (stat.isDirectory()) {
+				return this.parseDirectory(path);
+			}
+			if (stat.isFile()) {
+				return this.parseFile(path);
+			}
+		} catch (error) {
+			if (error.name === 'SyntaxError') {
+				additionalErrorInfo = `JSON failed to compile with error: ${chalk.dim(error.message)}.`;
+			}
+		}
 
-    return this.error(`Could not parse the given path: ${chalk.dim(path)}. ${additionalErrorInfo}`);
-  }
+		return this.error(`Could not parse the given path: ${chalk.dim(path)}. ${additionalErrorInfo}`);
+	}
 
-  parseDirectory(directory) {
-    const files = fs.readdirSync(directory);
+	parseDirectory(directory) {
+		const files = fs.readdirSync(directory);
 
-    const result = {};
+		const result = {};
 
-    for (const file of files) {
-      // Ignore dotfiles
-      if (file.startsWith('.') || !file.endsWith('.json')) {
-        continue;
-      }
+		for (const file of files) {
+			// Ignore dotfiles
+			if (file.startsWith('.') || !file.endsWith('.json')) {
+				continue;
+			}
 
-      Object.entries(this.parsePath(directory + sep + file)).forEach(([key, value]) => {
-        if (Object.hasOwnProperty.call(result, key)) {
-          result[key].push(...value);
-        } else {
-          result[key] = value;
-        }
-      });
-    }
+			Object.entries(this.parsePath(directory + sep + file)).forEach(([key, value]) => {
+				if (Object.hasOwnProperty.call(result, key)) {
+					result[key].push(...value);
+				} else {
+					result[key] = value;
+				}
+			});
+		}
 
-    return result;
-  }
+		return result;
+	}
 
-  parseFile(file) {
-    if (file.match(/package(-lock)?\.json$/)) {
-      return {};
-    }
+	parseFile(file) {
+		if (file.match(/package(-lock)?\.json$/)) {
+			return {};
+		}
 
-    const contents = JSON.parse(fs.readFileSync(file));
+		const contents = JSON.parse(fs.readFileSync(file));
 
-    if (Array.isArray(contents)) {
-      const lastSeperator = file.lastIndexOf(sep);
-      const endpoint = file.substring(lastSeperator > 0 ? lastSeperator + 1 : 0, file.length - 5);
-      return {
-        [endpoint]: contents,
-      };
-    }
+		if (Array.isArray(contents)) {
+			const lastSeperator = file.lastIndexOf(sep);
+			const endpoint = file.substring(lastSeperator > 0 ? lastSeperator + 1 : 0, file.length - 5);
+			return {
+				[endpoint]: contents,
+			};
+		}
 
-    return contents;
-  }
+		return contents;
+	}
 
-  post(endpoint, payload) {
-    const url = process.env.CHEC_API_URL;
-    const key = process.env.CHEC_SECRET_KEY;
+	post(endpoint, payload) {
+		const url = process.env.CHEC_API_URL;
+		const key = process.env.CHEC_SECRET_KEY;
 
-    if (!url || !key) {
-      return this.error(`Required .env keys "${chalk.bold('CHEC_API_URL')}" and/or ${chalk.bold('CHEC_SECRET_KEY')} are missing`);
-    }
+		if (!url || !key) {
+			return this.error(`Required .env keys "${chalk.bold('CHEC_API_URL')}" and/or ${chalk.bold('CHEC_SECRET_KEY')} are missing`);
+		}
 
-    const headers = {
-      'content-type': 'application/json',
-      'x-authorization': key,
-    };
+		const headers = {
+			'content-type': 'application/json',
+			'x-authorization': key,
+		};
 
-    return got(`${url}/${endpoint}`, {
-      method: 'post',
-      body: JSON.stringify(payload),
-      headers,
-      retry: {
-        retries: 0,
-      },
-    });
-  }
+		return got(`${url}/${endpoint}`, {
+			method: 'post',
+			body: JSON.stringify(payload),
+			headers,
+			retry: {
+				retries: 0,
+			},
+		});
+	}
 
-  error(log) {
-    if (this.showSpinner) {
-      this.spinner.stop();
-    }
-    throw new Error(log)
-  }
+	error(log) {
+		if (this.showSpinner) {
+			this.spinner.stop();
+		}
+		throw new Error(log)
+	}
 }
 
 module.exports = {
-    seed(path, logHandler = () => {}, spinner = false) {
-        return new Seeder(logHandler, spinner).run(path);
-    },
-    Seeder,
+	seed(path, logHandler = () => {}, spinner = false) {
+		return new Seeder(logHandler, spinner).run(path);
+	},
+	Seeder,
 }
