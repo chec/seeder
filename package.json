@@ -1,6 +1,6 @@
 {
   "name": "@chec/seeder",
-  "version": "1.0.0-beta2",
+  "version": "1.0.0",
   "description": "A utility script to seed data in your Chec account from .json files",
   "main": "index.js",
   "bin": {
