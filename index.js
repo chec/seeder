@@ -168,7 +168,7 @@ class Seeder {
   }
 
   post(endpoint, payload) {
-    const url = process.env.CHEC_API_URL;
+    const url = process.env.CHEC_API_URL || 'api.chec.io';
     const key = process.env.CHEC_SECRET_KEY;
 
     if (!url || !key) {
