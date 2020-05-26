@@ -15,13 +15,23 @@ class Seeder {
   }
 
   async run(path = process.cwd()) {
+    // Get a list of all seed files in the provided directory
     const entries = Object.entries(this.parsePath(path.replace(new RegExp(`${sep}$`), '')));
 
     if (entries.length === 0) {
       return this.error('The given path must be a .json file or a directory containing at least one valid .json file');
     }
 
-    entries.sort(([a], [b]) => a === 'assets' ? 1 : b === 'assets' ? -1 : 0);
+    // Make categories run first and assets run last
+    entries.sort(([a], [b]) => {
+      if (a === 'assets' || b === 'categories') {
+        return 1;
+      }
+      if (b === 'assets' || a === 'categories') {
+        return -1;
+      }
+      return 0;
+    });
 
     if (this.showSpinner) {
       this.spinner = ora({
@@ -42,6 +52,11 @@ class Seeder {
         queuedPromises.push(queue.add(() => {
             if (this.showSpinner) {
               this.spinner.text = `Seeding ${chalk.dim(endpoint)} #${index}. This may take some time...`;
+            }
+
+            // Replace category placeholders with actual category IDs when creating products
+            if (endpoint === 'products' && rest.product.category_id) {
+              rest.product.category_id = get(responses, rest.product.category_id);
             }
 
             return this.post(`/v1/${endpoint}`, rest)
