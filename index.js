@@ -15,6 +15,8 @@ class Seeder {
   }
 
   async run(path = process.cwd()) {
+    // fail only if env variable equals "true"
+    const shouldFailEarly = !!(process.env.FAIL_EARLY === 'true')
     // Get a list of all seed files in the provided directory
     const entries = Object.entries(this.parsePath(path.replace(new RegExp(`${sep}$`), '')));
 
@@ -73,7 +75,11 @@ class Seeder {
                 if (this.showSpinner) {
                   this.spinner.stop();
                 }
-                this.log(`Could not push an object to the ${chalk.dim(endpoint)} endpoint (${error.message}):`);
+                if (shouldFailEarly) {
+                  this.spinner.fail(`Could not push an object to the ${chalk.dim(endpoint)} endpoint (${error.message})`);
+                  throw error
+                }
+                this.log(`Could not push an object to the ${chalk.dim(endpoint)} endpoint (${error.message}). Resuming`);
                 if (this.showSpinner) {
                   this.spinner.start()
                 }
