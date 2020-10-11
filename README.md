@@ -27,7 +27,7 @@ Add a seed command to your package.json
 
 A Chec secret API key must be available in as the environment variable `CHEC_API_KEY` to use for seeding. The script is compatible with [dotenv](https://www.npmjs.com/package/dotenv).
 
-If you want to fail the execution if any seed returns error, provide environment variable `FAIL_EARLY=true`
+If you want to fail the execution if any seed call returns an error, provide environment variable `FAIL_EARLY=true`
 
 ### Global usage
 
