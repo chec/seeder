@@ -17,8 +17,6 @@ You can define following properties as environment variables:
 - `CHEC_SECRET_KEY` - (required) - Your Chec secret API key.
 - `CHEC_API_URL` - (optional) - API URL, defaults to `api.chec.io`.
 
-The script is compatible with [dotenv](https://www.npmjs.com/package/dotenv).
-
 ## Usage
 
 ### As a NPM script
