@@ -69,15 +69,7 @@ class Seeder {
                 }
                 responses[endpoint].push(JSON.parse(response.body))
               })
-              .catch(error => {
-                if (this.showSpinner) {
-                  this.spinner.stop();
-                }
-                this.log(`Could not push an object to the ${chalk.dim(endpoint)} endpoint (${error.message}):`);
-                if (this.showSpinner) {
-                  this.spinner.start()
-                }
-              })
+              .catch(this.apiError);
           }
         ));
 
@@ -88,7 +80,7 @@ class Seeder {
 
             return this.post(`/v1/products/${productId}/assets`, {
               assets: [{id: assetId}]
-            })
+            }).catch(this.apiError);
           }))
         }
       });
@@ -112,6 +104,10 @@ class Seeder {
     report.forEach(([endpoint, count]) => {
       this.log(`  ${chalk.bold(count)} ${endpoint}`);
     })
+  }
+
+  apiError = (error) => {
+    this.error(`Failed seeding - ${error.message}`);
   }
 
   parsePath(path) {
