@@ -54,3 +54,4 @@ const seed = require('@chec/seeder');
 
 seed('path/to/json/files');
 ```
+### chec seeder
