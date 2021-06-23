@@ -56,7 +56,8 @@ class Seeder {
 
             // Replace category placeholders with actual category IDs when creating products
             if (endpoint === 'products' && rest.product.category_id) {
-              rest.product.category_id = get(responses, rest.product.category_id);
+              rest.categories = [{ id: get(responses, rest.product.category_id) }];
+              rest.product.category_id = undefined;
             }
 
             return this.post(`/v1/${endpoint}`, rest)
