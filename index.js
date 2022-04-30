@@ -192,7 +192,7 @@ class Seeder {
       'x-authorization': key,
     };
 
-    return got(`${url}/${endpoint}`, {
+    return got(`${url}${endpoint}`, {
       method: 'post',
       body: JSON.stringify(payload),
       headers,
